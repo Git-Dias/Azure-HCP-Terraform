@@ -1,21 +1,12 @@
-terraform {
-  required_providers {
-    azurerm = {
-      source = "hashicorp/azurerm"
-      version = "4.47.0"
-    }
-  }
+resource "azurerm_resource_group" "lab" {
+  name     = var.rg_name
+  location = var.location
 }
 
-backend "azurerm" {
-    resource_group_name  = "RG-REMOTE-STATE"
-    storage_account_name = "storemotestate01"
-    container_name       = "remote-state"
-    key                  = "lab-env/terraform.tfstate"
-  }
-}
-
-provider "azurerm" {
-  # Configuration options
+resource "azurerm_virtual_network" "lab_vnet" {
+  name                = "vnet-lab"
+  address_space       = ["10.0.0.0/16"]
+  location            = azurerm_resource_group.lab.location
+  resource_group_name = azurerm_resource_group.lab.name
 }
 
