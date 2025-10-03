@@ -1,0 +1,69 @@
+name: 🚨 Terraform Infrastructure DESTROY
+
+on:
+  # Permite que este workflow seja acionado manualmente na aba 'Actions' do GitHub
+  workflow_dispatch:
+    inputs:
+      ambiente:
+        description: 'Ambiente a ser DESTRUÍDO (e.g., dev, homolog, prod). Deve ser consistente com o estado remoto.'
+        required: true
+        default: 'dev'
+      confirmar_destroy:
+        description: 'ATENÇÃO! Digite "DESTROY" para confirmar a exclusão. QUALQUER outro valor abortará.'
+        required: true
+        default: ''
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  terraform_destroy:
+    runs-on: ubuntu-latest
+    
+    # ⚠️ RECOMENDADO: Use um Environment para exigir aprovação manual antes da execução
+    # environment: Production 
+    
+    env:
+      # Variáveis de ambiente que o Terraform e o Azure CLI precisam.
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      # Garante que o OIDC (Azure Login) use as credenciais corretas
+      # ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }} 
+      # ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }} 
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          # Use o login por Service Principal se o OIDC não estiver configurado para o destroy
+          creds: ${{ secrets.AZURE_CREDENTIALS }} 
+          # OU use OIDC se configurado:
+          # client-id: ${{ secrets.AZURE_CLIENT_ID }} 
+          # tenant-id: ${{ secrets.AZURE_TENANT_ID }} 
+          # subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }} 
+
+      - name: Terraform Init
+        run: terraform -chdir=Azure init
+
+      # 🚨 PASSO CRÍTICO: CHECAGEM DE SEGURANÇA
+      - name: 🚨 Validação de Confirmação de Destroy
+        if: github.event.inputs.confirmar_destroy != 'DESTROY'
+        run: |
+          echo "::error::❌ A operação de DESTROY foi abortada. O valor de confirmação inserido ('${{ github.event.inputs.confirmar_destroy }}') não é 'DESTROY'."
+          exit 1
+      
+      # O plan -destroy mostra TUDO o que será excluído
+      - name: Terraform Destroy Plan
+        # O -var-file pode ser útil para selecionar variáveis de ambiente
+        run: terraform -chdir=Azure plan -destroy -out=tfdestroyplan 
+
+      - name: 🚀 Terraform DESTROY (Aplicar Exclusão)
+        # Este step só roda se a checagem de segurança acima for aprovada
+        if: github.event.inputs.confirmar_destroy == 'DESTROY'
+        run: terraform -chdir=Azure apply -auto-approve tfdestroyplan
