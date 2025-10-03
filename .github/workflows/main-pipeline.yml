@@ -33,18 +33,23 @@ jobs:
         run: terraform -chdir=Azure validate
 
       - name: Terraform Plan
-        run: terraform -chdir=Azure plan -out=tfplan
+        if: github.event_name == 'pull_request' 
+        run: terraform -chdir=Azure plan -out=tfplan 
 
       - name: Upload Plan
+        if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: terraform-plan
           path: Azure/tfplan
 
-      - name: Terraform Apply
-        if: github.ref == 'refs/heads/main'
-        run: terraform -chdir=Azure apply -auto-approve tfplan
+      - name: Download Plan
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-plan
+          path: Azure/
 
-      - name: Defender for Cloud Assessments
-        run: |
-          az security assessment list --query "[].{Name:name, Status:status.code}" -o table
+      - name: Terraform Apply
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: terraform -chdir=Azure apply -auto-approve Azure/tfplan
