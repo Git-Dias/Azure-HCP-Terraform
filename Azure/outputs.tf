@@ -1,5 +1,5 @@
 output "resource_group_name" {
-  value = azurerm_resource_group.lab.name
+  value = azurerm_resource_group.hcp_tf_lab.name
 }
 
 output "vnet_id" {
