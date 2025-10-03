@@ -9,14 +9,12 @@ on:
 permissions:
   id-token: write
   contents: read
-  pull-requests: write
+  pull-requests: write    # necessário para comentar no PR
 
 jobs:
-  terraform:
+  terraform-plan:
     runs-on: ubuntu-latest
-    env: 
-      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
+    if: github.event_name == 'pull_request'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,26 +33,59 @@ jobs:
       - name: Terraform Validate
         run: terraform -chdir=Azure validate
 
-      # Execução no Pull Request (gera plano)
       - name: Terraform Plan
-        if: github.event_name == 'pull_request'
+        id: plan
+        run: terraform -chdir=Azure plan -no-color | tee plan.txt
+
+      - name: Check Plan Result
+        id: check
+        run: |
+          if grep -q "No changes. Infrastructure is up-to-date." plan.txt; then
+            echo "status=✅ No changes detected" >> $GITHUB_OUTPUT
+          elif grep -q "Plan:" plan.txt; then
+            echo "status=⚠️ Changes detected" >> $GITHUB_OUTPUT
+          else
+            echo "status=❌ Error running plan" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Format Plan Output
+        run: |
+          echo '### Terraform Plan Result' > plan_comment.md
+          echo "${{ steps.check.outputs.status }}" >> plan_comment.md
+          echo '' >> plan_comment.md
+          echo '```hcl' >> plan_comment.md
+          cat plan.txt >> plan_comment.md
+          echo '```' >> plan_comment.md
+
+      - name: Comment Plan on PR
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          path: plan_comment.md
+
+  terraform-apply:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment: production   # exige aprovação manual em "Environments"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Terraform Init
+        run: terraform -chdir=Azure init
+
+      - name: Terraform Validate
+        run: terraform -chdir=Azure validate
+
+      - name: Terraform Plan
         run: terraform -chdir=Azure plan -out=tfplan
 
-      - name: Upload Plan
-        if: github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v4
-        with:
-          name: tfplan
-          path: Azure/tfplan
-
-      # Execução no Push para main (aplica o plano aprovado)
-      - name: Download Plan
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/download-artifact@v4
-        with:
-          name: tfplan
-          path: Azure/
-
       - name: Terraform Apply
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: terraform -chdir=Azure apply -auto-approve Azure/tfplan
+        run: terraform -chdir=Azure apply -auto-approve tfplan
