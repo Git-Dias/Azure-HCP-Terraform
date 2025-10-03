@@ -1,4 +1,4 @@
-resource "azurerm_resource_group" "lab" {
+resource "azurerm_resource_group" "hcp_lab" {
   name     = var.rg_name
   location = var.location
 }
