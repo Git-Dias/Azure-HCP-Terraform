@@ -6,6 +6,6 @@ output "vnet_id" {
   value = azurerm_virtual_network.lab_vnet.id
 }
 
-output "vnet_id" {
+output "vnet_id_02" {
   value = azurerm_virtual_network.lab_vnet_02.id
 }
