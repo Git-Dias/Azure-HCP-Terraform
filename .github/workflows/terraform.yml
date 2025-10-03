@@ -25,23 +25,23 @@ jobs:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Terraform Init
-        run: terraform -chdir=infra init
+        run: terraform -chdir=Azure init
 
       - name: Terraform Validate
-        run: terraform -chdir=infra validate
+        run: terraform -chdir=Azure validate
 
       - name: Terraform Plan
-        run: terraform -chdir=infra plan -out=tfplan
+        run: terraform -chdir=Azure plan -out=tfplan
 
       - name: Upload Plan
         uses: actions/upload-artifact@v4
         with:
           name: terraform-plan
-          path: infra/tfplan
+          path: Azure/tfplan
 
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main'
-        run: terraform -chdir=infra apply -auto-approve tfplan
+        run: terraform -chdir=Azure apply -auto-approve tfplan
 
       - name: Defender for Cloud Assessments
         run: |
